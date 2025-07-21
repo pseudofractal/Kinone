@@ -126,7 +126,7 @@ Dependencies (`pyproject.toml` pinned):
 
 ---
 
-## 7 Quick Start
+## Quick Start
 
 ```bash
 # 1. Fetch NIH CXR dataset (≈ 42 GB)
@@ -149,14 +149,33 @@ streamlit run dashboard.py
 
 ## Testing Process
 
-Each primitive $f$ satisfies
+For every scalar function $f:\mathbb{R}^n \to \mathbb{R}$ we verify that the
+analytic gradient produced by Kinone
 
 $$
-\frac{\| \hat{\nabla}f - \nabla f \|_2}{\| \nabla f \|_2 + \epsilon} < 10^{-4},
+\nabla f(\mathbf{x}) = \frac{\partial f}{\partial \mathbf{x}}
 $$
 
-where $\hat{\nabla}f$ is the central-difference estimate with step $h=10^{-3}$.
-Run all checks:
+matches a second‑order central‑difference estimate
+
+$$
+\hat{\nabla}f(\mathbf{x})=\frac{f(\mathbf{x}+h)-f(\mathbf{x}-h)}{2h}
+$$
+
+with step $h=10^{-3}$ (float32 default).
+
+We report the relative error
+
+$$
+\varepsilon_{\text{rel}}
+=\frac{\lVert\hat{\nabla}f-\nabla f\rVert_2}
+{\lVert\nabla f\rVert_2+\varepsilon},
+$$
+
+and require $\varepsilon_{\text{rel}}<10^{-4}$ (use $\varepsilon=10^{-6}$ to avoid
+division by zero when $\nabla f\approx0$).
+
+After editing any code, run all checks:
 
 ```bash
 pytest -q
