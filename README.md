@@ -16,7 +16,7 @@ Kinone is in no way a competetor to JAX, PyTorch or TensorFlow, it is a learning
 Let
 
 $$
-\mathcal{T} = (\mathbf{X},\,\operatorname{grad}) ,\quad 
+\mathcal{T} = (\mathbf{X},\,\text{grad}) ,\quad 
 \mathbf{X}\in\mathbb{R}^{n_1\times\cdots\times n_d}
 $$
 
@@ -40,20 +40,20 @@ $$
 \nabla_{\mathbf{x}}L=\bigl(\partial f(\mathbf{x})\bigr)^{\!\top}\nabla_{\mathbf{y}}L
 $$
 
-in $O\!\left(\sum_i \#\text{ops}_i\right)$ memory.
+in $O\!\left(\sum_i \text{ops}_i\right)$ memory.
 The design obeys the “define-by-run” paradigm: the dynamic graph $G=(V,E)$ is recorded during forward execution; backward traversal unfolds in reverse topological order.
 
 ---
 
 ##  Implemented Operator Set
 
-| Category        | Symbolic Definition |
+| Category | Symbolic Definition |
 | - | - |
-| Elementwise     | $y_i = \phi(x_i)\quad(\phi\in\{+,−,\times,\div,\exp,\log,\sigma\})$ |
+| Elementwise| $y_i = \phi(x_i)\quad(\phi\in\{+,−,\times,\div,\exp,\log,\sigma\})$ |
 | Matrix Multiplication | $\mathbf{Y}=\mathbf{A}\mathbf{B}$ |
 | Convolution 2-D | $Y_{c,j,k}=\sum_{p,q}X_{c,j+p,k+q}W_{c,p,q}$ |
-| Pooling         | $\max,\;\operatorname{avg}$ |
-| Norms           | BatchNorm (µ, σ² estimated) |
+| Pooling | $\max,\;\text{avg}$ |
+| Norms | BatchNorm ($\mu$, $\sigma^2$ estimated) |
 
 > Future plans include other missing operations such as `ConvTranspose`, `1D-3D convolutions`, `attention` style operatations
 
@@ -64,11 +64,11 @@ The design obeys the “define-by-run” paradigm: the dynamic graph $G=(V,E)$ i
 The modules in `src/core/` cover the following function classes:
 
 $$
-\mathcal{F}_{\text{CNN}} = \bigl\{ f\circ g\_L\circ\cdots\circ g\_1 \;\bigl|\; 
-g\_i\in\{\text{Conv},\text{BN},\sigma,\text{Pool}\},\; f\in\text{Linear} \bigr\},
+\mathcal{F}_{\text{CNN}} = \{ f\circ g\_L\circ\cdots\circ g\_1 \;\bigl|\; 
+g\_i\in\{\text{Conv},\text{BN},\sigma,\text{Pool}\},\; f\in\text{Linear} \},
 $$
 
-which subsumes **ResNet-$d$** with $d\in\{18,34,50,101,152\}$.
+which subsumes ResNet-$d$ with $d\in\{18,34,50,101,152\}$.
 Coupled with BCE-with-logits or cross-entropy, one obtains:
 
 * **Multi-label disease classification** (NIH ChestX-ray14 baseline).
