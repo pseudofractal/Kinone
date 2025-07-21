@@ -1,47 +1,60 @@
 # Kinone
-> 木の根
-> Ki no ne
+
+> 木の根  
+> Ki no ne  
 > Roots of a tree
 
-Kinone is a re-implementation of essential componenets of modern gradient based learning, written from first principles in NumPy, By design it is:
+Kinone is a re-implementation of essential componenets
+of modern gradient based learning,
+written from first principles in pure NumPy.
+By design it is:
 
 - Deterministic: No hidden kernels or device dependent determinism.
-- Transparent: No black boxes, every mathematical transformation is explicit and auditable.
-- Extensible: New operators require the forward definition and its analytic gradient. (Could be changed if we introduce [JAX](https://docs.jax.dev/en/latest/quickstart.html))
+- Transparent: No black boxes, every mathematical transformation is
+explicit and auditable.
+- Extensible: New operators require the forward definition and its analytic gradient.
+(Could be changed if we introduce [JAX](https://docs.jax.dev/en/latest/quickstart.html))
+- Reliable: Full test coverage with finite-difference checks for all primitives.
 
-Kinone is in no way a competetor to JAX, PyTorch or TensorFlow, it is a learning tool and a scaffold for experiments that require total algorithmic control and reportability.
+Kinone is in no way a competetor to JAX, PyTorch or TensorFlow,
+it is a learning project and a scaffold for experiments
+that require total algorithmic control and reportability.
 
 ## Mathematical Foundations
 
 Let
 
 $$
-\mathcal{T} = (\mathbf{X},\,\text{grad}) ,\quad 
+\mathcal{T} = (\mathbf{X},\,\text{grad}) ,\quad
 \mathbf{X}\in\mathbb{R}^{n_1\times\cdots\times n_d}
 $$
 
-denote a **Tensor** coupled with a gradient accumulator.
+denote a Tensor coupled with a gradient accumulator.
 Every primitive operator
 
 $$
-f: \mathbb{R}^{m}\rightarrow\mathbb{R}^{k},\qquad 
+f: \mathbb{R}^{m}\rightarrow\mathbb{R}^{k},\qquad
 \mathbf{y} = f(\mathbf{x})
 $$
 
 is registered with a $C^{1}$ map
 
 $$
-\partial f:\mathbb{R}^{m}\rightarrow\mathbb{R}^{k\times m},
+\partial f:\mathbb{R}^{m}\rightarrow\mathbb{R}^{k\times m}
 $$
 
-allowing Kinone’s reverse-mode automatic differentiation to compute for a scalar loss $L$
+allowing Kinone’s reverse-mode automatic differentiation
+to compute for a scalar loss $L$.
 
 $$
-\nabla_{\mathbf{x}}L=\bigl(\partial f(\mathbf{x})\bigr)^{\!\top}\nabla_{\mathbf{y}}L
+\nabla_{\mathbf{x}}L=\bigl(\partial f(\mathbf{x})\bigr)^{\top}\nabla_{\mathbf{y}}L
 $$
 
-in $O\!\left(\sum_i \text{ops}_i\right)$ memory.
-The design obeys the “define-by-run” paradigm: the dynamic graph $G=(V,E)$ is recorded during forward execution; backward traversal unfolds in reverse topological order.
+in $O\left(\sum_i \text{ops}_i\right)$ memory.
+The design obeys the
+[define-by-run paradigm](https://docs.chainer.org/en/stable/guides/define_by_run.html):
+the dynamic graph $G=(V,E)$ is recorded during forward execution with backward
+traversal unfolding in reverse [topological order](https://en.wikipedia.org/wiki/Topological_sorting).
 
 ---
 
@@ -49,13 +62,14 @@ The design obeys the “define-by-run” paradigm: the dynamic graph $G=(V,E)$ i
 
 | Category | Symbolic Definition |
 | - | - |
-| Elementwise| $y_i = \phi(x_i)\quad(\phi\in\{+,−,\times,\div,\exp,\log,\sigma\})$ |
+| Elementwise| $y_i = \phi(x_i)\quad(\phi\in\{+,−,\times,\div,etc.})$ |
 | Matrix Multiplication | $\mathbf{Y}=\mathbf{A}\mathbf{B}$ |
 | Convolution 2-D | $Y_{c,j,k}=\sum_{p,q}X_{c,j+p,k+q}W_{c,p,q}$ |
-| Pooling | $\max,\;\text{avg}$ |
+| Pooling | $\max, \text{avg}$ |
 | Norms | BatchNorm ($\mu$, $\sigma^2$ estimated) |
 
-> Future plans include other missing operations such as `ConvTranspose`, `1D-3D convolutions`, `attention` style operatations
+> Future plans include other missing operations such as
+`ConvTranspose`, `1D-3D convolutions`, `attention` style operatations
 
 ---
 
@@ -64,17 +78,13 @@ The design obeys the “define-by-run” paradigm: the dynamic graph $G=(V,E)$ i
 The modules in `src/core/` cover the following function classes:
 
 $$
-\mathcal{F}_{\text{CNN}} = \{ f\circ g\_L\circ\cdots\circ g\_1 \;\bigl|\; 
+\mathcal{F}_{\text{CNN}} = \{ f\circ g\_L\circ\cdots\circ g\_1 \;\bigl|\;
 g\_i\in\{\text{Conv},\text{BN},\sigma,\text{Pool}\},\; f\in\text{Linear} \},
 $$
 
-which subsumes ResNet-$d$ with $d\in\{18,34,50,101,152\}$.
-Coupled with BCE-with-logits or cross-entropy, one obtains:
-
-* **Multi-label disease classification** (NIH ChestX-ray14 baseline).
-* **Single-label image recognition** (CIFAR-10/100 after dataset adapter).
-* **Metric-learning architectures** (Siamese / triplet loss—add your own loss function).
-* **Deterministic autoencoders** (encoder ready; supply a decoder with up-sampling).
+which subsumes a sample ResNet - $d$ with
+$d\in\{18,34,50,101,152\}$ implementation
+for multi-label classification of NIH ChestX-ray dataset.
 
 ---
 
@@ -107,12 +117,12 @@ uv sync # Or equivalent if you are not using uv
 
 Dependencies (`pyproject.toml` pinned):
 
-* `numpy`
-* `opencv-python`
-* `albumentations`
-* `onnxruntime`
-* `streamlit`
-* `pytest`
+- `numpy`
+- `opencv-python`
+- `albumentations`
+- `onnxruntime`
+- `streamlit`
+- `pytest`
 
 ---
 
