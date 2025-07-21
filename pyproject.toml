@@ -1,0 +1,53 @@
+[project]
+name = "kinone"
+version = "0.1.0"
+description = "Re-implementation of essential componenets of modern gradient based learning."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "albumentations>=2.0.8",
+    "numpy>=2.3.1",
+    "onnx>=1.18.0",
+    "onnxruntime>=1.22.0",
+    "opencv-python>=4.11.0.86",
+    "pandas>=2.3.0",
+    "pytest>=8.4.1",
+    "streamlit>=1.35.0",
+    "tqdm>=4.67.1",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["src", "src.*"]
+exclude = ["tests*"]
+
+[tool.ruff]
+indent-width = 2
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.basedpyright]
+defineConstant = { DEBUG = true }
+reportMissingImports = "warn"
+reportMissingTypeStubs = true
+typeCheckingMode = "off"
+allowedUntypedLibraries = ["torchvision"]

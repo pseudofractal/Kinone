@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Data
+data/nih
+
+# Model
+checkpoints/
+
+# Virtual environments
+.venv
+.mnemosyne.json
+.mnemosyne.ignore
