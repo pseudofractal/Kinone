@@ -87,7 +87,6 @@ class NIHChestDataset:
       image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LINEAR)
       image = normalizer(image=image)["image"]
 
-    image = image.astype(np.float32) / 255.0
     image = image[np.newaxis, ...]
     return image, label.copy()
 

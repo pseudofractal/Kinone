@@ -101,10 +101,10 @@ class Adam(Optimizer):
         grad = grad.sum(axis=0)
 
       if self.weight_decay:
-        parameters.data -= bias_corrected_learning_rate * self.weight_decay * parameters.data
+        parameters.data -= self.learning_rate * self.weight_decay * parameters.data
 
-      first_moment[...] = self.β_1 * first_moment + (1 - self.β_1) * grad
-      second_moment[...] = self.β_2 * second_moment + (1 - self.β_2) * (grad**2)
+      first_moment[:] = self.β_1 * first_moment + (1 - self.β_1) * grad
+      second_moment[:] = self.β_2 * second_moment + (1 - self.β_2) * (grad**2)
 
       corrected_first_moment = first_moment / (1 - self.β_1**self._step_count)
       corrected_second_moment = second_moment / (1 - self.β_2**self._step_count)

@@ -83,7 +83,7 @@ def binary_cross_entropy_with_logits(
   unweighted = max_values - y_values * x_values + np.log1p(np.exp(-np.abs(x_values)))
   loss_matrix = weight_matrix * unweighted
   loss_value = loss_matrix.mean().item()
-  gradient_matrix = (_sigmoid(x_values) - y_values) / y_values.size
+  gradient_matrix = weight_matrix * (_sigmoid(x_values) - y_values) / y_values.size
   return loss_value, Tensor(gradient_matrix, requires_grad=False)
 
 
