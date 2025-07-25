@@ -88,7 +88,7 @@ class Adam(Optimizer):
   def step(self):
     self._step_count += 1
     t = self._step_count
-    lr_t = self.learning_rate * np.sqrt(1.0 - self.β_2**t) / (1.0 - self.β_1**t)
+    bias_corrected_learning_rate = self.learning_rate * np.sqrt(1.0 - self.β_2**t) / (1.0 - self.β_1**t)
 
     for parameters, first_moment, second_moment in zip(
       self.parameters, self._first_moment, self._second_moment
@@ -101,7 +101,7 @@ class Adam(Optimizer):
         grad = grad.sum(axis=0)
 
       if self.weight_decay:
-        parameters.data -= self.learning_rate * self.weight_decay * parameters.data
+        parameters.data -= bias_corrected_learning_rate * self.weight_decay * parameters.data
 
       first_moment[...] = self.β_1 * first_moment + (1 - self.β_1) * grad
       second_moment[...] = self.β_2 * second_moment + (1 - self.β_2) * (grad**2)
@@ -110,7 +110,7 @@ class Adam(Optimizer):
       corrected_second_moment = second_moment / (1 - self.β_2**self._step_count)
 
       parameters.data -= (
-        self.learning_rate
+        bias_corrected_learning_rate
         * corrected_first_moment
         / (np.sqrt(corrected_second_moment) + self.ε)
       )
@@ -144,35 +144,6 @@ class SGD(Optimizer):
     self.nesterov = nesterov
     self._velocity = [np.zeros_like(p.data) for p in self.parameters]
 
-
-class SGD(Optimizer):
-  """
-  Stochastic Gradient Descent with optional momentum and Nesterov acceleration.
-
-  θ_{t+1} = θ_t − η · v_t
-  v_{t+1} = μ·v_t + g_t                          # plain momentum
-          = μ·v_t + g_t                          # same buffer reused
-          g_t can include weight‑decay term.
-
-  If nesterov=True:
-    v_{t+1} = μ·v_t + g_t
-    θ_{t+1} = θ_t − η · (μ·v_{t+1} + g_t)
-  """
-
-  def __init__(
-    self,
-    parameters: Iterable[Tensor],
-    learning_rate: float = 0.01,
-    momentum: float = 0.0,
-    weight_decay: float = 0.0,
-    nesterov: bool = False,
-  ):
-    super().__init__(parameters, learning_rate)
-    self.momentum = momentum
-    self.weight_decay = weight_decay
-    self.nesterov = nesterov
-    self._velocity = [np.zeros_like(p.data) for p in self.parameters]
-
   def step(self):
     for p, v in zip(self.parameters, self._velocity):
       if p.grad is None:
@@ -187,59 +158,6 @@ class SGD(Optimizer):
       v += grad
       update = self.momentum * v + grad if self.nesterov else v
       p.data -= self.learning_rate * update
-
-
-class RMSProp(Optimizer):
-  """
-  RMSProp — keeps a running average of squared gradients.
-
-  E[g²]_t = ρ·E[g²]_{t‑1} + (1‑ρ)·g_t²
-  θ_{t+1} = θ_t − η · g_t / (√(E[g²]_t) + ε)
-  """
-
-  def __init__(
-    self,
-    parameters: Iterable[Tensor],
-    learning_rate: float = 0.001,
-    ρ: float = 0.9,
-    ε: float = 1e-8,
-    weight_decay: float = 0.0,
-  ):
-    super().__init__(parameters, learning_rate)
-    self.ρ = ρ
-    self.ε = ε
-    self.weight_decay = weight_decay
-    self._avg_sq = [np.zeros_like(p.data) for p in self.parameters]
-
-  def step(self):
-    for p, avg_sq in zip(self.parameters, self._avg_sq):
-      if p.grad is None:
-        continue
-      grad = p.grad.data
-      if grad.ndim > p.data.ndim:
-        grad = grad.sum(axis=0)
-      if self.weight_decay:
-        grad += self.weight_decay * p.data
-
-      avg_sq *= self.ρ
-      avg_sq += (1.0 - self.ρ) * (grad**2)
-      p.data -= self.learning_rate * grad / (np.sqrt(avg_sq) + self.ε)
-
-  def step(self):
-    for p, v in zip(self.parameters, self._velocity):
-      if p.grad is None:
-        continue
-      grad = p.grad.data
-      if grad.ndim > p.data.ndim:
-        grad = grad.sum(axis=0)
-      if self.weight_decay:
-        grad += self.weight_decay * p.data
-
-      v *= self.momentum
-      v += grad
-      update = self.momentum * v + grad if self.nesterov else v
-      p.data -= self.learning_rate * update
-
 
 class RMSProp(Optimizer):
   """

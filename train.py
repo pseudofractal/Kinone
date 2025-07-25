@@ -8,7 +8,7 @@ from datetime import datetime
 
 import numpy as np
 
-from src.core.losses import bce_with_logits
+from src.core.losses import binary_cross_entropy_with_logits
 from src.core.metrics import accuracy_score, roc_auc_score
 from src.core.models.resnet import resnet18
 from src.core.optim import Adam
@@ -108,6 +108,13 @@ def main():
   train_dataloader = data_module.train_dataloader()
   validation_dataloader = data_module.val_dataloader()
 
+  train_dataset = train_dataloader.dataset
+  pos_counts = np.zeros(len(DISEASES), dtype=np.int64)
+  for _, label in train_dataset.samples:
+    pos_counts += label
+  negative_counts = len(train_dataset) - pos_counts
+  pos_weight = (negative_counts / np.clip(pos_counts, 1, None)).astype(np.float32)
+
   model = resnet18(num_classes=len(DISEASES))
   optimizer = Adam(model.parameters(), learning_rate=arguments.lr)
   scheduler = StepLR(
@@ -142,7 +149,7 @@ def main():
       label_tensor = Tensor(labels)
 
       predictions = model(image_tensor)
-      loss, grad = bce_with_logits(predictions, label_tensor)
+      loss, grad = binary_cross_entropy_with_logits(predictions, label_tensor, pos_weight)
 
       predictions.grad = grad
       predictions.backward()

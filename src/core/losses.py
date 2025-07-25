@@ -68,7 +68,7 @@ def mean_absolute_error(predictions: Tensor, targets: Tensor) -> tuple[float, Te
 
 
 def binary_cross_entropy_with_logits(
-  logits: Tensor, targets: Tensor
+  logits: Tensor, targets: Tensor, pos_weight: float | np.ndarray | None = None
 ) -> tuple[float, Tensor]:
   """
   ℓ(x, y) = −[y · log σ(x) + (1 − y) · log(1 − σ(x))]
@@ -76,8 +76,12 @@ def binary_cross_entropy_with_logits(
   """
   x_values = logits.data
   y_values = targets.data.astype(np.float32)
+  if pos_weight is None:
+    pos_weight = 1.0
+  weight_matrix = y_values * pos_weight + (1.0 - y_values)
   max_values = np.clip(x_values, 0.0, None)
-  loss_matrix = max_values - y_values * x_values + np.log1p(np.exp(-np.abs(x_values)))
+  unweighted = max_values - y_values * x_values + np.log1p(np.exp(-np.abs(x_values)))
+  loss_matrix = weight_matrix * unweighted
   loss_value = loss_matrix.mean().item()
   gradient_matrix = (_sigmoid(x_values) - y_values) / y_values.size
   return loss_value, Tensor(gradient_matrix, requires_grad=False)

@@ -25,6 +25,8 @@ DISEASES = (
   "No Finding",
 )
 
+normalizer = A.Normalize(mean=0.449, std=0.226)
+
 augmentations = A.Compose(
     [
       A.RandomResizedCrop(size=(224, 224), scale=(0.8, 1.0)),
@@ -32,6 +34,7 @@ augmentations = A.Compose(
       A.Rotate(limit=10),
       A.CLAHE(clip_limit=2, p=0.5),
       A.RandomBrightnessContrast(p=0.5),
+      normalizer,
     ]
   )
 
@@ -82,6 +85,7 @@ class NIHChestDataset:
       image = augmentations(image=image)["image"]
     else:
       image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LINEAR)
+      image = normalizer(image=image)["image"]
 
     image = image.astype(np.float32) / 255.0
     image = image[np.newaxis, ...]
