@@ -150,9 +150,7 @@ def main():
 
       predictions = model(image_tensor)
       loss, grad = binary_cross_entropy_with_logits(predictions, label_tensor, pos_weight)
-
-      predictions.grad = grad
-      predictions.backward()
+      predictions.backward(grad)
 
       optimizer.step()
       optimizer.zero_grad()
