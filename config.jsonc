@@ -18,7 +18,7 @@
   "evaluate": {
     "checkpoint_path": "checkpoints/best_model.npz",
     "image_dir": "data/nih/images",
-    "csv_file": "data/nih/Data_Entry_2017.csv",
+    "csv_file": "data/nih/metadata.csv",
     "batch_size": 32
   },
 

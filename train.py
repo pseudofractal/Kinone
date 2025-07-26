@@ -114,6 +114,8 @@ def main():
     pos_counts += label
   negative_counts = len(train_dataset) - pos_counts
   pos_weight = (negative_counts / np.clip(pos_counts, 1, None)).astype(np.float32)
+  np.clip(pos_weight, 1.0, 20.0, out=pos_weight)
+  log(f"Using capped pos_weights: {pos_weight}", "DEBUG")
 
   model = resnet18(num_classes=len(DISEASES))
   optimizer = Adam(model.parameters(), learning_rate=arguments.lr)
