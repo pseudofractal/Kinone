@@ -184,6 +184,7 @@ def main():
       "epoch": epoch + 1,
       "loss": loss,
       "val_auc": auc,
+      "val_accuracy": accuracy,
       "lr": optimizer.learning_rate,
     }
     with open(log_file, "a") as f:
