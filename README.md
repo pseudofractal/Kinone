@@ -24,37 +24,36 @@ that require total algorithmic control and reportability.
 
 Let
 
-$$
-\mathcal{T} = (\mathbf{X},\,\text{grad}) ,\quad
-\mathbf{X}\in\mathbb{R}^{n_1\times\cdots\times n_d}
-$$
+```math
+\mathcal{T} = (\mathbf{Z}, \, \partial L), \qquad
+\mathbf{Z} \in \mathbb{R}^{n_1 \times \dots \times n_d},
+```
 
-denote a Tensor coupled with a gradient accumulator.
+denote a tensor together with an accumulator for its upstream adjoint.
+
 Every primitive operator
 
-$$
-f: \mathbb{R}^{m}\rightarrow\mathbb{R}^{k},\qquad
-\mathbf{y} = f(\mathbf{x})
-$$
+```math
+g : \mathbb{R}^{m} \to \mathbb{R}^{k},\qquad
+\mathbf{u} = g(\mathbf{v}),
+```
 
-is registered with a $C^{1}$ map
+is registered with its Jacobian
 
-$$
-\partial f:\mathbb{R}^{m}\rightarrow\mathbb{R}^{k\times m}
-$$
+```math
+J_g(\mathbf{v}) = \frac{\partial g}{\partial \mathbf{v}}(\mathbf{v}) \in \mathbb{R}^{k \times m}.
+```
 
-allowing Kinone’s reverse-mode automatic differentiation
-to compute for a scalar loss $L$.
+For a scalar objective $\mathcal{L}$ the reverse‑mode update is
 
-$$
-\nabla_{\mathbf{x}}L=\bigl(\partial f(\mathbf{x})\bigr)^{\top}\nabla_{\mathbf{y}}L
-$$
+```math
+\nabla_{\mathbf{v}} \mathcal{L} = J_g(\mathbf{v})^{\! \top} \, \nabla_{\mathbf{u}} \mathcal{L}
+```
 
-in $O\left(\sum_i \text{ops}_i\right)$ memory.
-The design obeys the
-[define-by-run paradigm](https://docs.chainer.org/en/stable/guides/define_by_run.html):
-the dynamic graph $G=(V,E)$ is recorded during forward execution with backward
-traversal unfolding in reverse [topological order](https://en.wikipedia.org/wiki/Topological_sorting).
+The system adheres to the [define‑by‑run](https://docs.chainer.org/en/stable/guides/define_by_run.html) paradigm: during the forward pass it records a dynamic DAG
+$`G=(V, \,E)`$, and the backward pass traverses $V$ in reverse [topological order](https://en.wikipedia.org/wiki/Topological_sorting), applying the update above at every node.
+
+Memory overhead equals the set of stored activations; checkpointing or recomputation can lower this below a naïve linear bound in the number of forward operations.
 
 ---
 
