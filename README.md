@@ -131,8 +131,8 @@ Dependencies (`pyproject.toml` pinned):
 # 1. Fetch NIH CXR dataset (≈ 42 GB)
 python -m src.scripts.download_nih_dataset --out-dir data/nih
 
-# 2. Train ResNet-18 baseline
-python train.py --dataset nih --epochs 30 --batch-size 32 --lr 1e-3
+# 2. Train ResNet-18 baseline (with dashboard)
+python main.py --dataset nih --epochs 30 --batch-size 32 --lr 1e-3 --dashboard
 
 # 3. Evaluate and compute ROC-AUC
 python evaluate.py --dataset nih --weights path/to/weights.npz

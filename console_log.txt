@@ -1,9 +1,0 @@
-○ [INFO] 00:00:00 ∘ Starting Training Script
-○ [INFO] 00:00:00 ∘ Processed Command-Line Arguments
-○ [INFO] 00:00:00 ∘ Loaded Dataset Module
-○ [DEBUG] 00:00:01 ∘ Using capped positive class weights.
-○ [INFO] 00:00:01 ∘ Model and Optimizer Initialized
-○ [INFO] 00:00:01 ∘ Epoch: 1/10
-    ○ [INFO] 00:00:10 ∘ Batch 1/2242, Loss: 1.2457
-○ [DEBUG] 00:11:26 ∘ SIGINT Caught – saving final weights and exiting immediately.
-  ○ [INFO] 00:11:27 ∘ Model saved to checkpoints/interrupted_1753609095.npz

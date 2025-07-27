@@ -20,6 +20,7 @@ from src.data.nih_datamodule import NIHDataModule
 
 def train(args):
   INITIAL_START_TIME = time.time()
+  LOG_FREQUENCY = 100
   CONSOLE_LOG_FILE_PATH = Path(args.console_log_file)
   STOP_SIGNAL_FILE_PATH = Path(args.stop_signal_file)
   run_config_file_path = Path(args.run_config_file)
@@ -120,6 +121,9 @@ def train(args):
 
   signal.signal(signal.SIGINT, immediate_interrupt_handler)
 
+  log_message(f"Logging progress to {training_log_file_path}", indent=1)
+  log_message(f"Logging every {LOG_FREQUENCY} batches", indent=1)
+
   for epoch_index in range(args.epochs):
     epoch_start_time = time.time()
     log_message(f"Epoch: {epoch_index + 1}/{args.epochs}")
@@ -139,13 +143,15 @@ def train(args):
       optimizer.zero_grad()
       total_training_loss += loss_value
       number_of_batches += 1
-      if batch_index % 100 == 0:
+      if batch_index % LOG_FREQUENCY == 0:
         log_message(f"Batch {batch_index + 1}/{len(train_dataloader.dataset) // train_dataloader.batch_size}, Loss: {loss_value:.4f}", indent=2)
 
     average_training_loss = (
       total_training_loss / number_of_batches if number_of_batches > 0 else 0
     )
 
+    log_message(f"Average Training Loss: {average_training_loss:.4f}", indent=2)
+    log_message("Starting Validation", indent=1)
     model.set_to_evaluation()
     all_validation_predictions = []
     all_validation_labels = []
