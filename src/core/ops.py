@@ -90,7 +90,7 @@ def add(a: Tensor | float, b: Tensor | float):
 class Neg(Function):
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     return -input_tensor
 
   def backward(self, gradient_output):
@@ -154,7 +154,7 @@ def div(a, b):
 class ReLU(Function):
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     mask = (input_tensor > 0).astype(input_tensor.dtype)
     ctx.save_for_backward(mask)
     return input_tensor * mask
@@ -177,7 +177,7 @@ class Sigmoid(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     output_tensor = 1.0 / (1.0 + np.exp(-input_tensor))
     ctx.save_for_backward(output_tensor)
     return output_tensor
@@ -200,7 +200,7 @@ class Tanh(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     output_tensor = np.tanh(input_tensor)
     ctx.save_for_backward(output_tensor)
     return output_tensor
@@ -223,7 +223,7 @@ class Swish(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     sigmoid_part = 1.0 / (1.0 + np.exp(-input_tensor))
     ctx.save_for_backward(input_tensor, sigmoid_part)
     return input_tensor * sigmoid_part
@@ -248,7 +248,7 @@ class HardSigmoid(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     slope_mask = ((input_tensor > -1.0) & (input_tensor < 1.0)).astype(
       input_tensor.dtype
     ) * 0.5
@@ -273,7 +273,7 @@ class HardTanh(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     pass_through_mask = ((input_tensor > -1.0) & (input_tensor < 1.0)).astype(
       input_tensor.dtype
     )
@@ -298,7 +298,7 @@ class HardSwish(Function):
 
   @staticmethod
   def forward(ctx, *args, **kwargs):
-    input_tensor, = args
+    (input_tensor,) = args
     hard_sigmoid_part = np.clip((input_tensor + 3.0) / 6.0, 0.0, 1.0)
     slope_mask = ((input_tensor > -3.0) & (input_tensor < 3.0)).astype(
       input_tensor.dtype
@@ -476,24 +476,80 @@ class Conv2d(Function):
   ∂L/∂X = col2im(∂L/∂X_col)
   """
 
+  stride: int
+  padding: int
+  groups: int
+  has_bias: bool
+
   @staticmethod
-  def forward(
-    context, input_tensor, kernel_tensor, bias_tensor=None, stride=1, padding=0
-  ):
-    context.stride = stride
-    context.padding = padding
-    context.has_bias = bias_tensor is not None
+  def forward(ctx, *args, **kwargs):
+    if len(args) >= 2:
+      input_tensor = args[0]
+      kernel_tensor = args[1]
+      bias_tensor = args[2] if len(args) > 2 else kwargs.get("bias_tensor", None)
+      stride = args[3] if len(args) > 3 else kwargs.get("stride", 1)
+      padding = args[4] if len(args) > 4 else kwargs.get("padding", 0)
+      groups = args[5] if len(args) > 5 else kwargs.get("groups", 1)
+    else:
+      input_tensor = kwargs["input_tensor"]
+      kernel_tensor = kwargs["kernel_tensor"]
+      bias_tensor = kwargs.get("bias_tensor", None)
+      stride = kwargs.get("stride", 1)
+      padding = kwargs.get("padding", 0)
+      groups = kwargs.get("groups", 1)
+
+    ctx.stride = stride
+    ctx.padding = padding
+    ctx.groups = groups
+    ctx.has_bias = bias_tensor is not None
+
     kernel_size = kernel_tensor.shape[2]
     patch_columns, output_height, output_width = _im2col(
       input_tensor, kernel_size, stride, padding
     )
-    context.save_for_backward(
+
+    ctx.save_for_backward(
       patch_columns, kernel_tensor, input_tensor.shape, output_height, output_width
     )
-    output = np.matmul(kernel_tensor.reshape(kernel_tensor.shape[0], -1), patch_columns)
+
+    if groups == 1:
+      output_matrix = np.matmul(
+        kernel_tensor.reshape(kernel_tensor.shape[0], -1), patch_columns
+      )
+    elif groups == input_tensor.shape[1]:
+      batch_size, input_channels, _, _ = input_tensor.shape
+      kernel_elements = kernel_size * kernel_size
+      reshaped_columns = patch_columns.reshape(
+        batch_size, input_channels, kernel_elements, -1
+      )
+      output_matrix = (
+        reshaped_columns * kernel_tensor.reshape(input_channels, kernel_elements, 1)
+      ).sum(2)
+    else:
+      batch_size, input_channels, _, _ = input_tensor.shape
+      output_channels = kernel_tensor.shape[0]
+      input_channels_per_group = input_channels // groups
+      output_channels_per_group = output_channels // groups
+      kernel_elements = kernel_size * kernel_size
+      reshaped_columns = patch_columns.reshape(
+        batch_size,
+        groups,
+        input_channels_per_group * kernel_elements,
+        -1,
+      )
+      reshaped_kernel = kernel_tensor.reshape(
+        groups,
+        output_channels_per_group,
+        input_channels_per_group * kernel_elements,
+      )
+      output_matrix = np.einsum(
+        "bgmn,gpm->bgpn", reshaped_columns, reshaped_kernel
+      ).reshape(batch_size, output_channels, -1)
+
     if bias_tensor is not None:
-      output += bias_tensor.reshape(1, -1, 1)
-    return output.reshape(
+      output_matrix += bias_tensor.reshape(1, -1, 1)
+
+    return output_matrix.reshape(
       input_tensor.shape[0], kernel_tensor.shape[0], output_height, output_width
     )
 
@@ -537,5 +593,6 @@ def conv2d(
   bias_tensor: Optional[Tensor] = None,
   stride: int = 1,
   padding: int = 0,
+  groups: int = 1,
 ):
-  return Conv2d.apply(input_tensor, kernel_tensor, bias_tensor, stride, padding)
+  return Conv2d.apply(input_tensor, kernel_tensor, bias_tensor, stride, padding, groups)

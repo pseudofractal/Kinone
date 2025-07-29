@@ -123,9 +123,10 @@ class Conv2D(Module):
     self.bias = Tensor(np.zeros(out_channels, dtype=np.float32), True) if bias else None
     self.stride = stride
     self.padding = padding
+    self.groups = groups
 
   def __call__(self, input: Tensor):
-    return conv2d(input, self.weight, self.bias, self.stride, self.padding)
+    return conv2d(input, self.weight, self.bias, self.stride, self.padding, self.groups)
 
 
 class ReLU(Module):
