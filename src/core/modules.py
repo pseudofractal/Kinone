@@ -9,6 +9,7 @@ NN layer functionalities.
 
 Everything returns/accepts `Tensor`, so gradients flow automatically.
 """
+
 from typing import Iterable
 
 import numpy as np
@@ -116,8 +117,11 @@ class Conv2D(Module):
     bias: bool = True,
     groups: int = 1,
   ):
+    if in_channels % groups:
+      raise ValueError("in_channels must be divisible by groups")
+
     weights = np.random.randn(
-      out_channels, in_channels, kernel_size, kernel_size
+      out_channels, in_channels // groups, kernel_size, kernel_size
     ).astype(np.float32) * np.sqrt(2.0 / (in_channels * kernel_size * kernel_size))
     self.weight = Tensor(weights, True)
     self.bias = Tensor(np.zeros(out_channels, dtype=np.float32), True) if bias else None

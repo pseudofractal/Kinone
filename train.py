@@ -10,7 +10,9 @@ import numpy as np
 
 from src.core.losses import binary_cross_entropy_with_logits
 from src.core.metrics import accuracy_score, roc_auc_score
-from src.core.models.resnet import resnet18
+
+# from src.core.models.resnet import resnet18
+from src.core.models.efficientnet import efficientnet_b0
 from src.core.optim import Adam
 from src.core.schedulers import StepLR
 from src.core.tensor import Tensor
@@ -92,7 +94,7 @@ def train(args):
   np.clip(positive_class_weight, 1.0, 20.0, out=positive_class_weight)
   log_message("Using capped positive class weights.", "DEBUG")
 
-  model = resnet18(num_classes=len(DISEASES))
+  model = efficientnet_b0(number_of_classes=len(DISEASES), input_channels=1)
   optimizer = Adam(model.parameters(), learning_rate=args.lr)
   scheduler = StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
   log_message("Model and Optimizer Initialized")
@@ -144,7 +146,10 @@ def train(args):
       total_training_loss += loss_value
       number_of_batches += 1
       if batch_index % LOG_FREQUENCY == 0:
-        log_message(f"Batch {batch_index + 1}/{len(train_dataloader.dataset) // train_dataloader.batch_size}, Loss: {loss_value:.4f}", indent=2)
+        log_message(
+          f"Batch {batch_index + 1}/{len(train_dataloader.dataset) // train_dataloader.batch_size}, Loss: {loss_value:.4f}",
+          indent=2,
+        )
 
     average_training_loss = (
       total_training_loss / number_of_batches if number_of_batches > 0 else 0
