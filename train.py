@@ -20,7 +20,7 @@ from src.data.nih_datamodule import NIHDataModule
 
 def train(args):
   INITIAL_START_TIME = time.time()
-  LOG_FREQUENCY = 100
+  LOG_FREQUENCY = 1
   CONSOLE_LOG_FILE_PATH = Path(args.console_log_file)
   STOP_SIGNAL_FILE_PATH = Path(args.stop_signal_file)
   run_config_file_path = Path(args.run_config_file)

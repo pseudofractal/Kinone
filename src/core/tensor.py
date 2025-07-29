@@ -30,7 +30,6 @@ import numpy as np
 
 def _to_array(value):
   return np.asarray(value, dtype=np.float32)
-  #return value if isinstance(value, np.ndarray) else np.asarray(value, dtype=np.float32)
 
 
 def _as_scalar(self):

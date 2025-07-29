@@ -12,6 +12,7 @@ keeps memory footprint predictable.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 import numpy as np
@@ -31,16 +32,16 @@ def _unbroadcast(
   return gradient_array
 
 
-class Function:
-  def __init__(self):
+class Function(ABC):
+  def __init__(self) -> None:
     self.parents: list[Tensor] = []
     self.saved_tensors: Tuple[np.ndarray, ...] = ()
 
-  def save_for_backward(self, *tensors):
+  def save_for_backward(self, *tensors) -> None:
     self.saved_tensors = tuple(tensors)
 
   @classmethod
-  def apply(cls, *args, **kwargs):
+  def apply(cls, *args, **kwargs) -> Tensor:
     context = cls()
     context.parents = [argument for argument in args if isinstance(argument, Tensor)]
     raw_arguments = [
@@ -55,16 +56,19 @@ class Function:
     return output_tensor
 
   @staticmethod
+  @abstractmethod
   def forward(ctx, *args, **kwargs):
     raise NotImplementedError
 
-  def backward(self, grad):
+  @abstractmethod
+  def backward(self, gradient_output) -> np.ndarray | tuple[np.ndarray, ...]:
     raise NotImplementedError
 
 
 class Add(Function):
   @staticmethod
-  def forward(ctx, left_operand, right_operand):
+  def forward(ctx, *args, **kwargs):
+    left_operand, right_operand = args
     ctx.save_for_backward(left_operand, right_operand)
     return left_operand + right_operand
 
@@ -85,7 +89,8 @@ def add(a: Tensor | float, b: Tensor | float):
 
 class Neg(Function):
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     return -input_tensor
 
   def backward(self, gradient_output):
@@ -102,7 +107,8 @@ def sub(a, b):
 
 class Mul(Function):
   @staticmethod
-  def forward(ctx, left_operand, right_operand):
+  def forward(ctx, *args, **kwargs):
+    left_operand, right_operand = args
     ctx.save_for_backward(left_operand, right_operand)
     return left_operand * right_operand
 
@@ -123,7 +129,8 @@ def mul(a, b):
 
 class Div(Function):
   @staticmethod
-  def forward(ctx, numerator, denominator):
+  def forward(ctx, *args, **kwargs):
+    numerator, denominator = args
     ctx.save_for_backward(numerator, denominator)
     return numerator / denominator
 
@@ -146,7 +153,8 @@ def div(a, b):
 
 class ReLU(Function):
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     mask = (input_tensor > 0).astype(input_tensor.dtype)
     ctx.save_for_backward(mask)
     return input_tensor * mask
@@ -168,7 +176,8 @@ class Sigmoid(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     output_tensor = 1.0 / (1.0 + np.exp(-input_tensor))
     ctx.save_for_backward(output_tensor)
     return output_tensor
@@ -190,7 +199,8 @@ class Tanh(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     output_tensor = np.tanh(input_tensor)
     ctx.save_for_backward(output_tensor)
     return output_tensor
@@ -212,7 +222,8 @@ class Swish(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     sigmoid_part = 1.0 / (1.0 + np.exp(-input_tensor))
     ctx.save_for_backward(input_tensor, sigmoid_part)
     return input_tensor * sigmoid_part
@@ -236,7 +247,8 @@ class HardSigmoid(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     slope_mask = ((input_tensor > -1.0) & (input_tensor < 1.0)).astype(
       input_tensor.dtype
     ) * 0.5
@@ -260,7 +272,8 @@ class HardTanh(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     pass_through_mask = ((input_tensor > -1.0) & (input_tensor < 1.0)).astype(
       input_tensor.dtype
     )
@@ -284,7 +297,8 @@ class HardSwish(Function):
   """
 
   @staticmethod
-  def forward(ctx, input_tensor):
+  def forward(ctx, *args, **kwargs):
+    input_tensor, = args
     hard_sigmoid_part = np.clip((input_tensor + 3.0) / 6.0, 0.0, 1.0)
     slope_mask = ((input_tensor > -3.0) & (input_tensor < 3.0)).astype(
       input_tensor.dtype
@@ -314,7 +328,8 @@ class MatMul(Function):
   """
 
   @staticmethod
-  def forward(ctx, matrix_a, matrix_b):
+  def forward(ctx, *args, **kwargs):
+    matrix_a, matrix_b = args
     ctx.save_for_backward(matrix_a, matrix_b)
     return np.matmul(matrix_a, matrix_b)
 
