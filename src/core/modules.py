@@ -114,6 +114,7 @@ class Conv2D(Module):
     stride: int = 1,
     padding: int = 0,
     bias: bool = True,
+    groups: int = 1,
   ):
     weights = np.random.randn(
       out_channels, in_channels, kernel_size, kernel_size

@@ -50,7 +50,7 @@ def mean_squared_error(predictions: Tensor, targets: Tensor) -> tuple[float, Ten
   ℓ(ŷ, y) = 1 ⁄ n ∑ᵢ (ŷᵢ − yᵢ)²
   ∂ℓ ⁄ ∂ŷ = 2 (ŷ − y) ⁄ n
   """
-  difference = predictions.data - targets.data.astype(np.float32)
+  difference = predictions.data.astype(np.float64) - targets.data.astype(np.float64)
   loss_value = np.mean(difference**2).item()
   gradient_matrix = (2.0 * difference) / difference.size
   return loss_value, Tensor(gradient_matrix, requires_grad=False)
