@@ -68,7 +68,7 @@ Memory overhead equals the set of stored activations; checkpointing or recomputa
 | Norms | BatchNorm ($\mu$, $\sigma^2$ estimated) |
 
 > Future plans include other missing operations such as
-`ConvTranspose`, `1D-3D convolutions`, `attention` style operatations
+`Attention` style operatations
 
 ---
 

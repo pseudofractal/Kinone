@@ -1,9 +1,8 @@
-from os import RTLD_DEEPBIND
 import numpy as np
 import pytest
 from numpy.random import randn
 
-from src.core.ops import conv2d, conv_nd, matmul
+from src.core.ops import conv2d, conv_nd, conv_transpose_nd, matmul
 from src.core.tensor import Tensor
 from tests.utils import assertion, finite_difference_gradients
 
@@ -96,6 +95,59 @@ def test_conv_nd_grad(dims, groups, stride, padding, bias_flag):
   else:
     tensors = [inp.data.copy(), ker.data.copy()]
     fd_fn = lambda i, k: _conv_nd_forward(i, k, None, stride, padding, groups)
+
+  gradients = finite_difference_gradients(fd_fn, tensors)
+  assertion(inp.grad.data, gradients[0], 0.1, 0.1)
+  assertion(ker.grad.data, gradients[1], 0.1, 0.1)
+  if bias_flag:
+    assertion(bias.grad.data, gradients[2], 0.1, 0.1)
+
+
+def _conv_transpose_nd_forward(inp, ker, bias, stride, padding, groups):
+  return conv_transpose_nd(
+    Tensor(inp),
+    Tensor(ker),
+    Tensor(bias) if bias is not None else None,
+    stride,
+    padding,
+    groups,
+  ).data.mean()
+
+
+TRANSPOSE_CASES = [
+  (1, 1, 0, True),
+  (1, 2, 0, False),
+  (2, 1, 1, True),
+  (2, 2, 0, False),
+  (3, 1, 0, True),
+  (3, 2, 1, False),
+]
+
+
+@pytest.mark.parametrize("dims,stride,padding,bias_flag", TRANSPOSE_CASES)
+def test_conv_transpose_nd_grad(dims, stride, padding, bias_flag):
+  batch_size = 2
+  channels_in = 3
+  channels_out = 4
+  kernel_size = 3
+  spatial_extent = 5
+
+  input_shape = (batch_size, channels_in) + (spatial_extent,) * dims
+  kernel_shape = (channels_in, channels_out) + (kernel_size,) * dims
+  bias_shape = (channels_out,)
+
+  inp = Tensor(randn(*input_shape).astype(np.float32), True)
+  ker = Tensor(randn(*kernel_shape).astype(np.float32), True)
+  bias = Tensor(randn(*bias_shape).astype(np.float32), True) if bias_flag else None
+
+  conv_transpose_nd(inp, ker, bias, stride, padding, 1).mean().backward()
+
+  if bias_flag:
+    tensors = [inp.data.copy(), ker.data.copy(), bias.data.copy()]
+    fd_fn = lambda i, k, b: _conv_transpose_nd_forward(i, k, b, stride, padding, 1)
+  else:
+    tensors = [inp.data.copy(), ker.data.copy()]
+    fd_fn = lambda i, k: _conv_transpose_nd_forward(i, k, None, stride, padding, 1)
 
   gradients = finite_difference_gradients(fd_fn, tensors)
   assertion(inp.grad.data, gradients[0], 0.1, 0.1)

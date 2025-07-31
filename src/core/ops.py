@@ -4,11 +4,20 @@ Primitives that power the autodiff engine.
 Design
 ∘ Function.apply builds the forward result and the backward closure.
 ∘ Broadcasting-aware gradients via `_unbroadcast`.
-∘ Coverage: element-wise {add, sub, mul, div, neg}, matmul, ReLU, reductions (sum, mean), and NumPy-level Conv2d.
 
-Each op stores only what is indispensable for its gradient
-keeps memory footprint predictable.
+Coverage
+  • Element-wise: add, sub, mul, div, neg  
+  • Unary activations: ReLU, Sigmoid, Tanh, Swish, HardSigmoid, HardTanh, HardSwish  
+  • Reductions: sum, mean  
+  • Linear algebra: matmul  
+  • Convolutions:
+      – Conv2d (2-D)
+      – ConvNd (N-D)
+      – ConvTranspose (N-D)
+
+Each op stores only what is indispensable for its gradient, keeping memory footprint predictable.
 """
+
 
 from __future__ import annotations
 
@@ -850,4 +859,162 @@ def conv_nd(
     stride=stride,
     padding=padding,
     groups=groups,
+  )
+
+
+class ConvTranspose(Function):
+  @staticmethod
+  def forward(
+    ctx,
+    input_array: np.ndarray,
+    kernel_array: np.ndarray,
+    bias_array: np.ndarray | None = None,
+    stride: int | Sequence[int] = 1,
+    padding: int | Sequence[int] = 0,
+    groups: int = 1,
+  ):
+    batch_size, input_channels, *input_spatial_shape = input_array.shape
+    dimensions = len(input_spatial_shape)
+    stride_tuple = _to_tuple(stride, dimensions)
+    padding_tuple = _to_tuple(padding, dimensions)
+    kernel_size = kernel_array.shape[2:]
+    kernel_elements = int(np.prod(kernel_size))
+    output_channels_per_group = kernel_array.shape[1]
+    output_channels = output_channels_per_group * groups
+
+    input_matrix = input_array.reshape(batch_size, input_channels, -1)
+
+    if groups == 1:
+      kernel_matrix = kernel_array.reshape(input_channels, -1)
+      column_matrix = np.einsum("ci,bcp->bip", kernel_matrix, input_matrix)
+    else:
+      input_channels_per_group = input_channels // groups
+      kernel_matrix = kernel_array.reshape(groups, input_channels_per_group, -1)
+      input_matrix_grouped = input_matrix.reshape(
+        batch_size, groups, input_channels_per_group, -1
+      )
+      column_matrix_grouped = np.einsum(
+        "gci,bgcp->bgip", kernel_matrix, input_matrix_grouped
+      )
+      column_matrix = column_matrix_grouped.reshape(
+        batch_size, output_channels * kernel_elements, -1
+      )
+
+    output_spatial_shape = tuple(
+      (input_spatial_shape[d] - 1) * stride_tuple[d]
+      - 2 * padding_tuple[d]
+      + kernel_size[d]
+      for d in range(dimensions)
+    )
+
+    output_tensor = _col2im_nd(
+      column_matrix,
+      (batch_size, output_channels, *output_spatial_shape),
+      kernel_size,
+      stride_tuple,
+      padding_tuple,
+      tuple(input_spatial_shape),
+    )
+
+    if bias_array is not None:
+      output_tensor += bias_array.reshape((1, -1) + (1,) * dimensions)
+
+    ctx.save_for_backward(
+      input_array,
+      kernel_array,
+      bias_array,
+      np.array(stride_tuple),
+      np.array(padding_tuple),
+      np.array(input_spatial_shape),
+      np.array(output_spatial_shape),
+      np.array(groups),
+    )
+    ctx.kernel_elements = kernel_elements
+    ctx.has_bias = bias_array is not None
+    return output_tensor
+
+  def backward(self, gradient_output: np.ndarray):
+    (
+      input_array,
+      kernel_array,
+      bias_array,
+      stride_array,
+      padding_array,
+      input_spatial_array,
+      _,
+      groups_array,
+    ) = self.saved_tensors
+
+    stride_tuple = tuple(int(v) for v in stride_array)
+    padding_tuple = tuple(int(v) for v in padding_array)
+    groups = int(groups_array)
+
+    batch_size, input_channels, *input_spatial_shape = input_array.shape
+    dimensions = len(input_spatial_shape)
+    kernel_size = kernel_array.shape[2:]
+    kernel_elements = self.kernel_elements
+    output_channels_per_group = kernel_array.shape[1]
+    output_channels = output_channels_per_group * groups
+
+    column_gradient_matrix, _ = _im2col_nd(
+      gradient_output, kernel_size, stride=stride_tuple, padding=padding_tuple
+    )
+
+    input_matrix = input_array.reshape(batch_size, input_channels, -1)
+
+    if groups == 1:
+      kernel_matrix = kernel_array.reshape(input_channels, -1)
+      input_gradient_matrix = np.einsum(
+        "ci,bip->bcp", kernel_matrix, column_gradient_matrix
+      )
+      kernel_gradient_matrix = np.einsum(
+        "bcp,bip->ci", input_matrix, column_gradient_matrix
+      )
+    else:
+      input_channels_per_group = input_channels // groups
+      kernel_matrix = kernel_array.reshape(groups, input_channels_per_group, -1)
+      input_matrix_grouped = input_matrix.reshape(
+        batch_size, groups, input_channels_per_group, -1
+      )
+      column_gradient_grouped = column_gradient_matrix.reshape(
+        batch_size, groups, output_channels_per_group * kernel_elements, -1
+      )
+      input_gradient_grouped = np.einsum(
+        "gci,bgip->bgcp", kernel_matrix, column_gradient_grouped
+      )
+      input_gradient_matrix = input_gradient_grouped.reshape(
+        batch_size, input_channels, -1
+      )
+      kernel_gradient_matrix = np.einsum(
+        "bgcp,bgip->gci", input_matrix_grouped, column_gradient_grouped
+      )
+
+    input_gradient = input_gradient_matrix.reshape(input_array.shape)
+    kernel_gradient = kernel_gradient_matrix.reshape(kernel_array.shape)
+    bias_gradient = (
+      gradient_output.sum(axis=(0, *range(2, 2 + dimensions)))
+      if self.has_bias
+      else None
+    )
+
+    return (
+      input_gradient,
+      kernel_gradient,
+      bias_gradient,
+      None,
+      None,
+      None,
+    )
+
+
+def conv_transpose_nd(
+  input_array: Tensor,
+  kernel_array: Tensor,
+  bias_array: Tensor | None = None,
+  stride: int | Sequence[int] = 1,
+  padding: int | Sequence[int] = 0,
+  groups: int = 1,
+):
+  return ConvTranspose.apply(
+    input_array, kernel_array, bias_array, stride, padding, groups
   )
