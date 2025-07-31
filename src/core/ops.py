@@ -13,16 +13,16 @@ keeps memory footprint predictable.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Sequence
 
 import numpy as np
-from numpy.lib.stride_tricks import as_strided
+from numpy.lib.stride_tricks import as_strided, sliding_window_view
 
 from .tensor import Tensor
 
 
 def _unbroadcast(
-  gradient_array: np.ndarray, target_shape: Tuple[int, ...]
+  gradient_array: np.ndarray, target_shape: tuple[int, ...]
 ) -> np.ndarray:
   while gradient_array.ndim > len(target_shape):
     gradient_array = gradient_array.sum(axis=0)
@@ -35,7 +35,7 @@ def _unbroadcast(
 class Function(ABC):
   def __init__(self) -> None:
     self.parents: list[Tensor] = []
-    self.saved_tensors: Tuple[np.ndarray, ...] = ()
+    self.saved_tensors: tuple[np.ndarray, ...] = ()
 
   def save_for_backward(self, *tensors) -> None:
     self.saved_tensors = tuple(tensors)
@@ -351,7 +351,7 @@ def matmul(a: Tensor, b: Tensor):
 class Sum(Function):
   @staticmethod
   def forward(
-    ctx, input_tensor, axis: Optional[Tuple[int, ...]] = None, keepdims: bool = False
+    ctx, input_tensor, axis: tuple[int, ...] | None = None, keepdims: bool = False
   ):
     ctx.axis = axis
     ctx.keepdims = keepdims
@@ -368,14 +368,14 @@ class Sum(Function):
     return np.broadcast_to(gradient_output, input_shape)
 
 
-def sum(x: Tensor, axis: Optional[Tuple[int, ...]] = None, keepdims: bool = False):
+def sum(x: Tensor, axis: tuple[int, ...] | None = None, keepdims: bool = False):
   return Sum.apply(x, axis, keepdims)
 
 
 class Mean(Function):
   @staticmethod
   def forward(
-    ctx, input_tensor, axis: Optional[Tuple[int, ...]] = None, keepdims: bool = False
+    ctx, input_tensor, axis: tuple[int, ...] | None = None, keepdims: bool = False
   ):
     ctx.axis = axis
     ctx.keepdims = keepdims
@@ -405,7 +405,7 @@ class Mean(Function):
     return gradient_output / count
 
 
-def mean(x: Tensor, axis: Optional[Tuple[int, ...]] = None, keepdims: bool = False):
+def mean(x: Tensor, axis: tuple[int, ...] | None = None, keepdims: bool = False):
   return Mean.apply(x, axis, keepdims)
 
 
@@ -596,3 +596,258 @@ def conv2d(
   groups: int = 1,
 ):
   return Conv2d.apply(input_tensor, kernel_tensor, bias_tensor, stride, padding, groups)
+
+
+def _to_tuple(x, dims: int) -> tuple[int, ...]:
+  if isinstance(x, Sequence):
+    if len(x) != dims:
+      raise ValueError(f"Expected {dims} values, got {len(x)}.")
+    return tuple(int(v) for v in x)
+  return (int(x),) * dims
+
+
+def _im2col_nd(
+  input_image: np.ndarray,
+  kernel_size,
+  stride=1,
+  padding=0,
+):
+  """
+  General N‑D im2col.
+  input_image shape: (B, C, D1, …, Dn)
+  Returns
+      columns      –  (B, C * ∏k_i, ∏out_i)
+      output_shape –  tuple(out_1, …, out_n)
+  """
+  B, C, *spatial = input_image.shape
+  dims = len(spatial)
+
+  kernel_size = _to_tuple(kernel_size, dims)
+  stride = _to_tuple(stride, dims)
+  padding = _to_tuple(padding, dims)
+
+  out_shape = tuple(
+    (spatial[d] + 2 * padding[d] - kernel_size[d]) // stride[d] + 1 for d in range(dims)
+  )
+
+  pad_spec = [(0, 0), (0, 0)] + [(p, p) for p in padding]
+  padded = np.pad(input_image, pad_spec)
+
+  patches = sliding_window_view(
+    padded,
+    window_shape=kernel_size,
+    axis=tuple(range(2, 2 + dims)),
+  )
+  slicing = (
+    [slice(None), slice(None)]
+    + [slice(None, None, stride[d]) for d in range(dims)]
+    + [slice(None)] * dims
+  )
+  patches = patches[tuple(slicing)]
+
+  order = [0, 1] + list(range(2 + dims, 2 + 2 * dims)) + list(range(2, 2 + dims))
+  patches = patches.transpose(order)
+
+  k_elems = np.prod(kernel_size)
+  out_elems = np.prod(out_shape)
+  columns = patches.reshape(B, C * k_elems, out_elems)
+  return columns, out_shape
+
+
+def _col2im_nd(
+  columns: np.ndarray,
+  input_shape: tuple[int, ...],
+  kernel_size,
+  stride,
+  padding,
+  output_shape: tuple[int, ...],
+):
+  """
+  Inverse of _im2col_nd.
+  columns shape: (B, C * ∏k_i, ∏out_i)
+  Returns reconstructed input tensor (un‑padded).
+  """
+  B, C, *spatial = input_shape
+  dims = len(spatial)
+
+  kernel_size = _to_tuple(kernel_size, dims)
+  stride = _to_tuple(stride, dims)
+  padding = _to_tuple(padding, dims)
+
+  k_elems = np.prod(kernel_size)
+  columns = columns.reshape(B, C, *kernel_size, *output_shape)
+
+  padded_shape = [s + 2 * p for s, p in zip(spatial, padding)]
+  padded = np.zeros((B, C, *padded_shape), dtype=columns.dtype)
+
+  for k_idx in np.ndindex(*kernel_size):
+    out_slices = tuple(
+      slice(k_idx[d], k_idx[d] + stride[d] * output_shape[d], stride[d])
+      for d in range(dims)
+    )
+    padded[(slice(None), slice(None)) + out_slices] += columns[
+      (slice(None), slice(None)) + k_idx + (Ellipsis,)
+    ]
+
+  crop_slices = tuple(slice(p, p + spatial[d]) for d, p in enumerate(padding))
+  return padded[(slice(None), slice(None)) + crop_slices]
+
+
+class ConvNd(Function):
+  @staticmethod
+  def forward(
+    ctx,
+    input_array: np.ndarray,
+    kernel_array: np.ndarray,
+    bias_array: np.ndarray | None = None,
+    stride: int | Sequence[int] = 1,
+    padding: int | Sequence[int] = 0,
+    groups: int = 1,
+  ):
+    batch_size, channels_in, *spatial_shape = input_array.shape
+    channels_out = kernel_array.shape[0]
+    kernel_size = kernel_array.shape[2:]
+    kernel_elements = int(np.prod(kernel_size))
+
+    if isinstance(stride, int):
+      stride = (stride,) * len(spatial_shape)
+    if isinstance(padding, int):
+      padding = (padding,) * len(spatial_shape)
+
+    assert channels_in % groups == 0 and channels_out % groups == 0
+
+    columns, output_spatial_shape = _im2col_nd(
+      input_array, kernel_size, stride=stride, padding=padding
+    )
+
+    if groups == 1:
+      output = np.matmul(kernel_array.reshape(channels_out, -1), columns)
+    elif groups == channels_in:
+      columns_r = columns.reshape(batch_size, channels_in, kernel_elements, -1)
+      output = (
+        columns_r * kernel_array.reshape(channels_in, 1, kernel_elements, 1)
+      ).sum(2)
+    else:
+      channels_in_group = channels_in // groups
+      channels_out_group = channels_out // groups
+      columns_r = columns.reshape(
+        batch_size, groups, channels_in_group * kernel_elements, -1
+      )
+      kernel_r = kernel_array.reshape(
+        groups, channels_out_group, channels_in_group * kernel_elements
+      )
+      output = np.einsum("bgmn,gpm->bgpn", columns_r, kernel_r).reshape(
+        batch_size, channels_out, -1
+      )
+
+    if bias_array is not None:
+      output += bias_array.reshape(1, -1, 1)
+
+    ctx.save_for_backward(
+      input_array,
+      kernel_array,
+      bias_array,
+      columns,
+      np.array(output_spatial_shape),
+      np.array(stride),
+      np.array(padding),
+      np.array(groups),
+    )
+    return output.reshape(batch_size, channels_out, *output_spatial_shape)
+
+  def backward(self, gradient_output):
+    (
+      input_array,
+      kernel_array,
+      bias_array,
+      columns,
+      output_spatial_shape,
+      stride,
+      padding,
+      groups,
+    ) = self.saved_tensors
+    stride = tuple(stride)
+    padding = tuple(padding)
+    groups = int(groups)
+
+    batch_size, channels_in, *spatial_shape = input_array.shape
+    channels_out = kernel_array.shape[0]
+    kernel_size = kernel_array.shape[2:]
+    kernel_elements = int(np.prod(kernel_size))
+
+    gradient_output = gradient_output.reshape(batch_size, channels_out, -1)
+
+    if groups == 1:
+      gradient_kernel = np.einsum("bop,bkp->ok", gradient_output, columns).reshape(
+        kernel_array.shape
+      )
+      gradient_columns = np.einsum(
+        "ko,bop->bkp", kernel_array.reshape(channels_out, -1).T, gradient_output
+      )
+    elif groups == channels_in:
+      columns_r = columns.reshape(batch_size, channels_in, kernel_elements, -1)
+      gradient_kernel = (
+        (gradient_output.reshape(batch_size, channels_in, 1, -1) * columns_r)
+        .sum((0, 3))
+        .reshape(kernel_array.shape)
+      )
+      gradient_columns = (
+        kernel_array.reshape(channels_in, kernel_elements, 1)
+        * gradient_output.reshape(batch_size, channels_in, 1, -1)
+      ).reshape(batch_size, channels_in * kernel_elements, -1)
+    else:
+      channels_in_group = channels_in // groups
+      channels_out_group = channels_out // groups
+      columns_r = columns.reshape(
+        batch_size, groups, channels_in_group * kernel_elements, -1
+      )
+      grad_out_r = gradient_output.reshape(batch_size, groups, channels_out_group, -1)
+
+      gradient_kernel = np.einsum("bgop,bgkp->gok", grad_out_r, columns_r).reshape(
+        kernel_array.shape
+      )
+
+      gradient_columns = np.einsum(
+        "gok,bgop->bgkp",
+        kernel_array.reshape(
+          groups, channels_out_group, channels_in_group * kernel_elements
+        ),
+        grad_out_r,
+      ).reshape(batch_size, channels_in * kernel_elements, -1)
+
+    gradient_input = _col2im_nd(
+      gradient_columns,
+      input_array.shape,
+      kernel_size,
+      stride,
+      padding,
+      tuple(output_spatial_shape),
+    )
+    gradient_bias = gradient_output.sum(axis=(0, 2)) if bias_array is not None else None
+
+    return (
+      gradient_input,
+      gradient_kernel,
+      gradient_bias,
+      None,
+      None,
+      None,
+    )
+
+
+def conv_nd(
+  input_array: np.ndarray,
+  kernel_array: np.ndarray,
+  bias_array: np.ndarray | None = None,
+  stride: int | Sequence[int] = 1,
+  padding: int | Sequence[int] = 0,
+  groups: int = 1,
+):
+  return ConvNd.apply(
+    input_array,
+    kernel_array,
+    bias_array,
+    stride=stride,
+    padding=padding,
+    groups=groups,
+  )

@@ -5,13 +5,31 @@ RTOL = 1e-2
 ATOL = 1e-4
 
 
-def assertion(computed, numerical, rtol=RTOL, atol=ATOL, name=""):
-  try:
-    np.testing.assert_allclose(computed, numerical, rtol, atol)
-  except AssertionError as err:
-    print(f"{name}∘Computed:\n", computed.shape)
-    print(f"{name}∘Numerical:\n", numerical.shape)
-    raise err
+def assertion(
+  computed: np.ndarray,
+  numerical: np.ndarray,
+  rtol: float = RTOL,
+  atol: float = ATOL,
+  name: str = "",
+) -> None:
+  """
+  Assert ‖computed − numerical‖ ≤ atol + rtol·|numerical| element-wise.
+  On failure raises a single-line AssertionError pointing to the worst element.
+  """
+  diff = np.abs(computed - numerical)
+  tol = atol + rtol * np.abs(numerical)
+  mask = diff > tol
+  if mask.any():
+    worst = np.unravel_index(np.argmax(diff / tol), diff.shape)
+    raise AssertionError(
+      f"{name} - grad mismatch at {worst} : "
+      f"Computed={computed[worst]:.6g}, Numerical={numerical[worst]:.6g}, "
+      f"Absolute Error={diff[worst]:.6g}, "
+      f"Relative Error={(diff[worst] / (np.abs(numerical[worst]) + 1e-20)):.6g}, "
+      f"Allowed Absolute={atol}, Relative={rtol}, "
+      f"Computed Shape={computed.shape}, "
+      f"Numerical Shape={numerical.shape}"
+    )
 
 
 def finite_difference_gradients(f, inputs, eps=EPS):
@@ -32,5 +50,3 @@ def finite_difference_gradients(f, inputs, eps=EPS):
       iterator.iternext()
     gradients.append(gradient)
   return gradients
-
-
