@@ -12,59 +12,81 @@ Backward gives dℓ/dx, dℓ/dγ, dℓ/dβ.
 import numpy as np
 
 from .modules import Module
-from .tensor import Tensor
 from .ops import Function
+from .tensor import Tensor
 
 
 class BatchNorm2dOp(Function):
   @staticmethod
   def forward(
-    context, input, γ, β, running_μ, running_σ2, training, momentum=0.1, ε=1e-5
+    context,
+    input,
+    γ,
+    β,
+    running_μ,
+    running_σ2,
+    training,
+    momentum=0.1,
+    ε=1e-5,
   ):
-    _, channels, _, _ = input.shape
-    if training:
-      μ = input.mean(axis=(0, 2, 3), keepdims=True)
-      σ2 = input.var(axis=(0, 2, 3), keepdims=True)
-      running_μ *= 1 - momentum
-      running_μ += momentum * μ.squeeze()
-      running_σ2 *= 1 - momentum
-      running_σ2 += momentum * σ2.squeeze()
-    else:
-      μ = running_μ.reshape(1, channels, 1, 1)
-      σ2 = running_σ2.reshape(1, channels, 1, 1)
+    batch, channels, height, width = input.shape
 
-    σ = np.sqrt(σ2 + ε)
-    normalized_input = (input - μ) / σ
-    output = γ.reshape(1, channels, 1, 1) * normalized_input + β.reshape(
+    if training:
+      batch_mean = input.mean(axis=(0, 2, 3), keepdims=True)
+      batch_variance = input.var(axis=(0, 2, 3), keepdims=True)
+      running_μ *= 1.0 - momentum
+      running_μ += momentum * batch_mean.reshape(-1)
+      running_σ2 *= 1.0 - momentum
+      running_σ2 += momentum * batch_variance.reshape(-1)
+    else:
+      batch_mean = running_μ.reshape(1, channels, 1, 1)
+      batch_variance = running_σ2.reshape(1, channels, 1, 1)
+
+    standard_deviation = np.sqrt(batch_variance + ε)
+    normalised_tensor = (input - batch_mean) / standard_deviation
+    output = γ.reshape(1, channels, 1, 1) * normalised_tensor + β.reshape(
       1, channels, 1, 1
     )
 
-    context.save_for_backward(input, μ, σ, γ, normalized_input)
+    sample_count = batch * height * width
+    context.save_for_backward(
+      normalised_tensor,
+      standard_deviation,
+      γ,
+      sample_count,
+    )
+
     return output
 
-  def backward(ctx, output_gradient):
-    input, μ, σ, γ, normalized_input = ctx.saved_tensors
-    batches, channels, height, width = output_gradient.shape
-    num_elements = batches * height * width
+  def backward(context, output_gradient):
+    normalised_tensor, standard_deviation, γ, sample_count = context.saved_tensors
 
-    # Gradients of loss w.r.t. γ and β
-    γ_gradient = np.sum(output_gradient * normalized_input, axis=(0, 2, 3))
+    γ_gradient = np.sum(output_gradient * normalised_tensor, axis=(0, 2, 3))
     β_gradient = np.sum(output_gradient, axis=(0, 2, 3))
 
-    # Gradient of loss w.r.t. the normalized input
-    normalized_input_gradient = output_gradient * γ.reshape(1, channels, 1, 1)
+    normalised_gradient = output_gradient * γ.reshape(1, -1, 1, 1)
 
-    # Gradient of loss w.r.t. the input
-    dx = (1.0 / (num_elements * σ)) * (
-      num_elements * normalized_input_gradient
-      - np.sum(normalized_input_gradient, axis=(0, 2, 3), keepdims=True)
-      - normalized_input
+    input_gradient = (1.0 / (sample_count * standard_deviation)) * (
+      sample_count * normalised_gradient
+      - np.sum(normalised_gradient, axis=(0, 2, 3), keepdims=True)
+      - normalised_tensor
       * np.sum(
-        normalized_input_gradient * normalized_input, axis=(0, 2, 3), keepdims=True
+        normalised_gradient * normalised_tensor,
+        axis=(0, 2, 3),
+        keepdims=True,
       )
     )
 
-    return dx, γ_gradient, β_gradient, None, None, None, None, None
+    return (
+      input_gradient,
+      γ_gradient,
+      β_gradient,
+      None,
+      None,
+      None,
+      None,
+      None,
+    )
 
 
 def batch_norm_2d(
@@ -77,13 +99,22 @@ def batch_norm_2d(
   momentum=0.1,
   ε=1e-5,
 ):
-  return BatchNorm2dOp.apply(input, γ, β, running_μ, running_σ2, training, momentum, ε)
+  return BatchNorm2dOp.apply(
+    input,
+    γ,
+    β,
+    running_μ,
+    running_σ2,
+    training,
+    momentum,
+    ε,
+  )
 
 
 class BatchNorm2d(Module):
   def __init__(self, channels, momentum=0.1, ε=1e-5):
-    self.weight = Tensor(np.ones(channels, dtype=np.float32), True)
-    self.bias = Tensor(np.zeros(channels, dtype=np.float32), True)
+    self.weight = Tensor(np.ones(channels, dtype=np.float32), requires_grad=True)
+    self.bias = Tensor(np.zeros(channels, dtype=np.float32), requires_grad=True)
     self.running_μ = np.zeros(channels, dtype=np.float32)
     self.running_σ2 = np.ones(channels, dtype=np.float32)
     self.momentum = momentum
