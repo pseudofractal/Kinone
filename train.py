@@ -96,7 +96,11 @@ def train(args):
   log_message("Using capped positive class weights.", "DEBUG")
 
   model = efficientnet_b0(number_of_classes=len(DISEASES), input_channels=1)
-  optimizer = Adam(model.parameters(), learning_rate=args.lr)
+  optimizer = Adam(
+    model.parameters(),
+    learning_rate=args.lr,
+    maximum_gradient_norm=args.maximum_gradient_norm,
+  )
   scheduler = StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
   log_message("Model and Optimizer Initialized")
 

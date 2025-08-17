@@ -70,12 +70,14 @@ class Adam(Optimizer):
     β_2: float = 0.999,
     ε: float = 1e-8,
     weight_decay: float = 0.0,
+    maximum_gradient_norm: float | None = None,
   ):
     super().__init__(parameters, learning_rate)
     self.β_1 = β_1
     self.β_2 = β_2
     self.ε = ε
     self.weight_decay = weight_decay
+    self.maximum_gradient_norm = maximum_gradient_norm
 
     self._step_count = 0
     self._first_moment = [
@@ -87,8 +89,21 @@ class Adam(Optimizer):
 
   def step(self):
     self._step_count += 1
+
+    if self.maximum_gradient_norm is not None:
+      all_grads = [p.grad.data for p in self.parameters if p.grad is not None]
+      if all_grads:
+        l2_norm = np.sqrt(sum(np.sum(g**2) for g in all_grads))
+        if l2_norm > self.maximum_gradient_norm:
+          clip_coefficient = self.maximum_gradient_norm / (l2_norm + self.ε)
+          for p in self.parameters:
+            if p.grad is not None:
+              p.grad.data *= clip_coefficient
+
     t = self._step_count
-    bias_corrected_learning_rate = self.learning_rate * np.sqrt(1.0 - self.β_2**t) / (1.0 - self.β_1**t)
+    bias_corrected_learning_rate = (
+      self.learning_rate * np.sqrt(1.0 - self.β_2**t) / (1.0 - self.β_1**t)
+    )
 
     for parameters, first_moment, second_moment in zip(
       self.parameters, self._first_moment, self._second_moment
@@ -159,6 +174,7 @@ class SGD(Optimizer):
       update = self.momentum * v + grad if self.nesterov else v
       p.data -= self.learning_rate * update
 
+
 class RMSProp(Optimizer):
   """
   RMSProp — keeps a running average of squared gradients.
@@ -179,21 +195,21 @@ class RMSProp(Optimizer):
     self.ρ = ρ
     self.ε = ε
     self.weight_decay = weight_decay
-    self._avg_sq = [np.zeros_like(p.data) for p in self.parameters]
+    self._average_square = [np.zeros_like(p.data) for p in self.parameters]
 
   def step(self):
-    for p, avg_sq in zip(self.parameters, self._avg_sq):
-      if p.grad is None:
+    for parameter, average_square in zip(self.parameters, self._average_square):
+      if parameter.grad is parameter:
         continue
-      grad = p.grad.data
-      if grad.ndim > p.data.ndim:
+      grad = parameter.grad.data
+      if grad.ndim > parameter.data.ndim:
         grad = grad.sum(axis=0)
       if self.weight_decay:
-        grad += self.weight_decay * p.data
+        grad += self.weight_decay * parameter.data
 
-      avg_sq *= self.ρ
-      avg_sq += (1.0 - self.ρ) * (grad**2)
-      p.data -= self.learning_rate * grad / (np.sqrt(avg_sq) + self.ε)
+      average_square *= self.ρ
+      average_square += (1.0 - self.ρ) * (grad**2)
+      parameter.data -= self.learning_rate * grad / (np.sqrt(average_square) + self.ε)
 
 
 __all__ = ["Optimizer", "Adam", "SGD", "RMSProp"]

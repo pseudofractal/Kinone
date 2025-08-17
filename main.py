@@ -24,6 +24,9 @@ parser.add_argument(
   "--lr-step-size", type=int, default=train_config.get("lr_step_size", 5)
 )
 parser.add_argument("--lr-gamma", type=float, default=train_config.get("lr_gamma", 0.1))
+parser.add_argument(
+  "--max-grad-norm", type=float, default=train_config.get("maximum_gradient_norm", None)
+)
 parser.add_argument("--seed", type=int, default=train_config.get("seed", 42))
 parser.add_argument(
   "--load-checkpoint", type=str, default=train_config.get("load_checkpoint", None)
