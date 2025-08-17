@@ -30,6 +30,9 @@ class BatchNorm2dOp(Function):
     ε=1e-5,
   ):
     batch, channels, height, width = input.shape
+    context.running_μ = running_μ
+    context.running_σ2 = running_σ2
+    context.ε = ε
 
     if training:
       batch_mean = input.mean(axis=(0, 2, 3), keepdims=True)

@@ -16,7 +16,7 @@
 
   "train": {
     "image_dir": "data/nih/images",
-    "csv_file":  "data/nih/metadata.csv",
+    "csv_file": "data/nih/metadata.csv",
     "dataset": "nih",
     "seed": 42,
     "epochs": 10,
@@ -38,6 +38,11 @@
   "predict": {
     "checkpoint_path": "",
     "image_path": ""
+  },
+
+  "export": {
+    "weights_path": "checkpoints/best_model.npz",
+    "architecture": "efficientnet_b0",
+    "output_path": "checkpoints/best_model.onnx"
   }
 }
-

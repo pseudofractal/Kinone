@@ -13,6 +13,7 @@ from src.core.metrics import accuracy_score, roc_auc_score
 
 # from src.core.models.resnet import resnet18
 from src.core.models.efficientnet import efficientnet_b0
+from src.core.onnx import export_as_onnx
 from src.core.optim import Adam
 from src.core.schedulers import StepLR
 from src.core.tensor import Tensor
@@ -22,7 +23,7 @@ from src.data.nih_datamodule import NIHDataModule
 
 def train(args):
   INITIAL_START_TIME = time.time()
-  LOG_FREQUENCY = 1
+  LOG_FREQUENCY = 100
   CONSOLE_LOG_FILE_PATH = Path(args.console_log_file)
   STOP_SIGNAL_FILE_PATH = Path(args.stop_signal_file)
   run_config_file_path = Path(args.run_config_file)
@@ -245,10 +246,8 @@ def train(args):
   log_message("Finished Training.")
 
   if args.export_onnx:
-    from src.scripts.export_onnx import export_onnx
-
     log_message(f"Exporting to ONNX format at {args.export_onnx}")
     dummy_input = Tensor(np.zeros((1, 1, 224, 224), dtype=np.float32))
     output_tensor = model(dummy_input)
-    export_onnx(output_tensor, args.export_onnx)
+    export_as_onnx(output_tensor, args.export_onnx)
     log_message(f"ONNX model written to {args.export_onnx}")

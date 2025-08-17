@@ -1,0 +1,4 @@
+∘ Validation AUC: 0.5241, Accuracy: 0.9133
+∘ Validation AUC: 0.5283, Accuracy: 0.9153
+∘ Validation AUC: 0.5352, Accuracy: 0.9136
+∘ Validation AUC: 0.5454, Accuracy: 0.9128
