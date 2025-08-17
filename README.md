@@ -125,23 +125,71 @@ Dependencies (`pyproject.toml` pinned):
 
 ---
 
-## Quick Start
+## Usage Examples
+
+This section provides a step-by-step guide to using the scripts in this project.
+
+### 1. Download the Dataset
+
+First, download the NIH Chest X-ray dataset. This script will fetch and extract all image archives.
 
 ```bash
-# 1. Fetch NIH CXR dataset (≈ 42 GB)
+# Download and extract the NIH Chest X-ray14 dataset (approx. 42 GB)
 python -m src.scripts.download_nih_dataset --out-dir data/nih
+```
+**Important:** The metadata file is not downloaded automatically. You must manually download `Data_Entry_2017.csv` from the official dataset page and save it as `data/nih/metadata.csv` for the training script to work.
 
-# 2. Train ResNet-18 baseline (with dashboard)
-python main.py --dataset nih --epochs 30 --batch-size 32 --lr 1e-3 --dashboard
+### 2. Train a Model
 
-# 3. Evaluate and compute ROC-AUC
-python evaluate.py --dataset nih --weights path/to/weights.npz
+Start a new training run. A new directory will be created under `runs/` to store logs, configuration, and model checkpoints.
 
-# 4. ONNX export (ops-set 13)
-python -m src.scripts.export_onnx --weights path/to/weights.npz --out resnet18.onnx
+```bash
+# Start a new training run with a 10-epoch schedule
+python main.py --epochs 10 --batch-size 32 --lr 1e-3 --dashboard
+```
 
-# 5. Launch live inference demo
-streamlit run dashboard.py
+To resume training from a previously saved checkpoint, use the `--load-checkpoint` argument.
+
+```bash
+# Continue training from the best model of a previous run
+# This will load the weights and continue for another 10 epochs
+python main.py --load-checkpoint runs/20250817_180000/checkpoints/best_model_....npz --epochs 10
+```
+
+### 3. Evaluate a Trained Model
+
+After a training run is complete, you can evaluate its best-performing checkpoint on the test set.
+
+```bash
+# Evaluate the best model from a specific training run
+python evaluate.py --run-dir runs/20250817_180000
+```
+
+### 4. Export to ONNX
+
+Export the best model from a training run into the ONNX format for interoperability.
+
+```bash
+# Export the best model from a run to model.onnx
+python export_onnx.py --run-dir runs/20250817_180000 --output-filename model.onnx
+```
+
+### 5. Run Inference on a Single Image
+
+Use a trained model to get predictions for a single image file.
+
+```bash
+# Get predictions for a single chest X-ray image
+python predict.py --run-dir runs/20250817_180000 --image-path /path/to/your/image.png
+```
+
+### 6. Launch the Dashboard
+
+The training dashboard is launched automatically by `main.py` when you use the `--dashboard` flag. You can also launch it manually to inspect the results of a completed run.
+
+```bash
+# Launch the Streamlit dashboard to view logs from a specific run
+streamlit run dashboard.py -- --training-log-file runs/20250817_180000/training_log.json
 ```
 
 ---

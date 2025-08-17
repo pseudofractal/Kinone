@@ -114,7 +114,7 @@ def export_as_onnx(
       running_mean = numpy_helper.from_array(
         getattr(
           context,
-          "running_mean",
+          "running_μ",
           np.zeros_like(gamma.data, dtype=np.float32),
         ),
         name=f"{gamma.name}_running_mean",
@@ -122,7 +122,7 @@ def export_as_onnx(
       running_var = numpy_helper.from_array(
         getattr(
           context,
-          "running_var",
+          "running_σ2",
           np.ones_like(gamma.data, dtype=np.float32),
         ),
         name=f"{gamma.name}_running_var",

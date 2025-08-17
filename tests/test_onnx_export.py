@@ -6,14 +6,14 @@ import onnx
 from src.core.models.efficientnet import efficientnet_b0
 from src.core.models.resnet import resnet18
 from src.core.tensor import Tensor
-from src.scripts.export_onnx import export_onnx
+from src.core.onnx import export_as_onnx
 
 
 def _run_export(output_tensor: Tensor, file_path: Path) -> None:
   """
   Helper — export, verify with onnx.checker, then remove the artefact.
   """
-  export_onnx(output_tensor, str(file_path))
+  export_as_onnx(output_tensor, str(file_path))
   onnx.checker.check_model(str(file_path))
   assert file_path.exists()
   file_path.unlink()
