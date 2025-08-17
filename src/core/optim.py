@@ -68,7 +68,7 @@ class Adam(Optimizer):
     learning_rate: float = 0.01,
     β_1: float = 0.9,
     β_2: float = 0.999,
-    ε: float = 1e-8,
+    ε: float = 1e-6,
     weight_decay: float = 0.0,
     maximum_gradient_norm: float | None = None,
   ):
