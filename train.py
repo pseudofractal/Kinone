@@ -218,8 +218,16 @@ def train(args):
       "epoch_duration_seconds": epoch_end_time - epoch_start_time,
       "total_elapsed_time_seconds": epoch_end_time - INITIAL_START_TIME,
     }
-    with open(training_log_file_path, "a") as file_handle:
-      file_handle.write(json.dumps(log_entry) + "\n")
+    log_entries = []
+    if training_log_file_path.exists() and training_log_file_path.stat().st_size > 0:
+      with open(training_log_file_path, "r") as file_handle:
+        try:
+          log_entries = json.load(file_handle)
+        except json.JSONDecodeError:
+          log_entries = []
+    log_entries.append(log_entry)
+    with open(training_log_file_path, "w") as file_handle:
+      json.dump(log_entries, file_handle, indent=2)
 
     if macro_validation_auc > best_validation_auc:
       best_validation_auc = macro_validation_auc
