@@ -1,7 +1,10 @@
 import argparse
 import os
+import shutil
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
 
 import train
 from src.data.nih_datamodule import NIHDataModule
@@ -25,7 +28,7 @@ parser.add_argument(
 )
 parser.add_argument("--lr-gamma", type=float, default=train_config.get("lr_gamma", 0.1))
 parser.add_argument(
-  "--max-grad-norm", type=float, default=train_config.get("maximum_gradient_norm", None)
+  "--maximum-gradient-norm", type=float, default=train_config.get("maximum_gradient_norm", None)
 )
 parser.add_argument("--seed", type=int, default=train_config.get("seed", 42))
 parser.add_argument(
@@ -42,6 +45,16 @@ parser.set_defaults(dashboard=dashboard_config.get("enabled", True))
 parser = NIHDataModule.add_argparse_args(parser)
 args = parser.parse_args()
 
+run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+run_directory = Path("runs") / run_timestamp
+run_directory.mkdir(parents=True, exist_ok=True)
+shutil.copyfile("config.jsonc", run_directory / "config.jsonc")
+args.run_directory = run_directory
+args.console_log_file = run_directory / Path(args.console_log_file).name
+args.stop_signal_file = run_directory / Path(args.stop_signal_file).name
+args.run_config_file = run_directory / Path(args.run_config_file).name
+args.training_log_file = run_directory / Path(args.training_log_file).name
+
 dashboard_proc = None
 try:
   if args.dashboard:
@@ -55,15 +68,16 @@ try:
       "--training-pid",
       str(os.getpid()),
       "--console-log-file",
-      args.console_log_file,
+      str(args.console_log_file.resolve()),
       "--stop-signal-file",
-      args.stop_signal_file,
+      str(args.stop_signal_file.resolve()),
       "--run-config-file",
-      args.run_config_file,
+      str(args.run_config_file.resolve()),
       "--training-log-file",
-      args.training_log_file,
+      str(args.training_log_file.resolve()),
     ]
     dashboard_proc = subprocess.Popen(dashboard_cmd)
+
   train.train(args)
 finally:
   if dashboard_proc is not None:

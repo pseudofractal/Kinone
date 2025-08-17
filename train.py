@@ -10,8 +10,6 @@ import numpy as np
 
 from src.core.losses import binary_cross_entropy_with_logits
 from src.core.metrics import accuracy_score, roc_auc_score
-
-# from src.core.models.resnet import resnet18
 from src.core.models.efficientnet import efficientnet_b0
 from src.core.onnx import export_as_onnx
 from src.core.optim import Adam
@@ -24,9 +22,12 @@ from src.data.nih_datamodule import NIHDataModule
 def train(args):
   INITIAL_START_TIME = time.time()
   LOG_FREQUENCY = 100
+
+  RUN_DIR = Path(args.run_directory)
   CONSOLE_LOG_FILE_PATH = Path(args.console_log_file)
   STOP_SIGNAL_FILE_PATH = Path(args.stop_signal_file)
-  run_config_file_path = Path(args.run_config_file)
+  RUN_CONFIG_FILE_PATH = Path(args.run_config_file)
+  TRAINING_LOG_FILE_PATH = Path(args.training_log_file)
 
   def termination_handler(_, __):
     log_message("Termination signal received. Exiting gracefully.", "INFO")
@@ -52,9 +53,11 @@ def train(args):
   if CONSOLE_LOG_FILE_PATH.exists():
     CONSOLE_LOG_FILE_PATH.unlink()
 
-  log_message("Starting Training Script")
+  log_message(f"Starting Training Run: {RUN_DIR.name}")
+  log_message(f"All artifacts will be saved in: {RUN_DIR.resolve()}")
   log_message("Processed Command-Line Arguments")
-  Path("checkpoints").mkdir(exist_ok=True)
+
+  (RUN_DIR / "checkpoints").mkdir(exist_ok=True)
 
   if args.dataset == "nih":
     data_module = NIHDataModule(args)
@@ -81,7 +84,7 @@ def train(args):
     "hyperparameters": args_dict,
     "dataset_information": dataset_information,
   }
-  with open(run_config_file_path, "w") as file_handle:
+  with open(RUN_CONFIG_FILE_PATH, "w") as file_handle:
     json.dump(run_configuration, file_handle, indent=2)
 
   train_dataset = train_dataloader.dataset
@@ -110,15 +113,16 @@ def train(args):
 
   best_validation_auc = 0.0
   best_model_checkpoint_path = None
-  training_log_file_path = Path(args.training_log_file)
-  if training_log_file_path.exists():
-    training_log_file_path.unlink()
+  if TRAINING_LOG_FILE_PATH.exists():
+    TRAINING_LOG_FILE_PATH.unlink()
 
   def immediate_interrupt_handler(signal_number, frame):
     log_message(
       "SIGINT Caught – saving final weights and exiting immediately.", "DEBUG"
     )
-    interrupted_checkpoint_path = f"checkpoints/interrupted_{int(time.time())}.npz"
+    interrupted_checkpoint_path = (
+      RUN_DIR / f"checkpoints/interrupted_{int(time.time())}.npz"
+    )
     model_weights = {
       name: parameter.data for name, parameter in model.named_parameters()
     }
@@ -128,7 +132,7 @@ def train(args):
 
   signal.signal(signal.SIGINT, immediate_interrupt_handler)
 
-  log_message(f"Logging progress to {training_log_file_path}", indent=1)
+  log_message(f"Logging progress to {TRAINING_LOG_FILE_PATH}", indent=1)
   log_message(f"Logging every {LOG_FREQUENCY} batches", indent=1)
 
   for epoch_index in range(args.epochs):
@@ -223,14 +227,14 @@ def train(args):
       "total_elapsed_time_seconds": epoch_end_time - INITIAL_START_TIME,
     }
     log_entries = []
-    if training_log_file_path.exists() and training_log_file_path.stat().st_size > 0:
-      with open(training_log_file_path, "r") as file_handle:
+    if TRAINING_LOG_FILE_PATH.exists() and TRAINING_LOG_FILE_PATH.stat().st_size > 0:
+      with open(TRAINING_LOG_FILE_PATH, "r") as file_handle:
         try:
           log_entries = json.load(file_handle)
         except json.JSONDecodeError:
           log_entries = []
     log_entries.append(log_entry)
-    with open(training_log_file_path, "w") as file_handle:
+    with open(TRAINING_LOG_FILE_PATH, "w") as file_handle:
       json.dump(log_entries, file_handle, indent=2)
 
     if macro_validation_auc > best_validation_auc:
@@ -241,7 +245,7 @@ def train(args):
         os.remove(best_model_checkpoint_path)
 
       timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-      best_model_checkpoint_path = f"checkpoints/best_model_{timestamp}.npz"
+      best_model_checkpoint_path = RUN_DIR / f"checkpoints/best_model_{timestamp}.npz"
       model_weights = {
         name: parameter.data for name, parameter in model.named_parameters()
       }
@@ -258,8 +262,10 @@ def train(args):
   log_message("Finished Training.")
 
   if args.export_onnx:
-    log_message(f"Exporting to ONNX format at {args.export_onnx}")
+    onnx_filename = Path(args.export_onnx).name if args.export_onnx else "model.onnx"
+    onnx_path = RUN_DIR / onnx_filename
+    log_message(f"Exporting to ONNX format at {onnx_path}")
     dummy_input = Tensor(np.zeros((1, 1, 224, 224), dtype=np.float32))
     output_tensor = model(dummy_input)
-    export_as_onnx(output_tensor, args.export_onnx)
-    log_message(f"ONNX model written to {args.export_onnx}")
+    export_as_onnx(output_tensor, str(onnx_path))
+    log_message(f"ONNX model written to {onnx_path}")
