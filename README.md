@@ -4,6 +4,10 @@
 > Ki no ne  
 > Roots of a tree
 
+<p align="center">
+  <img src="report/images/dashboard.png" alt="Kinone Dashboard" width="75%">
+</p>
+
 Kinone is a re-implementation of essential componenets
 of modern gradient based learning,
 written from first principles in pure NumPy.
@@ -19,6 +23,9 @@ explicit and auditable.
 Kinone is in no way a competetor to JAX, PyTorch or TensorFlow,
 it is a learning project and a scaffold for experiments
 that require total algorithmic control and reportability.
+
+The report cab be found in `pdf` format
+[here](report/main.pdf).
 
 ## Mathematical Foundations
 
@@ -185,13 +192,16 @@ python predict.py --run-dir runs/20250817_180000 --image-path /path/to/your/imag
 
 ### 6. Launch the Dashboard
 
-The training dashboard is launched automatically by `main.py` when you use the `--dashboard` flag. You can also launch it manually to inspect the results of a completed run.
+The dashboard has two modes: Live Mode for monitoring an active training session, and Analysis Mode for reviewing completed runs.
+
+**Live Mode** is launched automatically by `main.py` or explicitly when you use the `--dashboard` flag, as shown in the training example. It provides real-time metrics and controls to stop the training process. Use `--no-dashboard` flag for `main.py` to not launch without dashboard.
+
+**Analysis Mode** allows you to inspect the results of any past run. When launched directly, it will automatically find all training sessions in the `runs/` directory and let you choose one from a dropdown menu.
 
 ```bash
-# Launch the Streamlit dashboard to view logs from a specific run
-streamlit run dashboard.py -- --training-log-file runs/20250817_180000/training_log.json
+# Launch the dashboard in Analysis Mode to review past runs
+streamlit run dashboard.py
 ```
-
 ---
 
 ## Testing Process
